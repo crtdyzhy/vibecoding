@@ -137,7 +137,7 @@
                 handLandmarker = await HandLandmarker.createFromOptions(vision, {
                     baseOptions: {
                         modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
-                        delegate: "GPU" // 使用 GPU 加速，这对手机很重要
+                        delegate: "CPU" // 使用 GPU 加速，这对手机很重要
                     },
                     runningMode: "VIDEO",
                     numHands: 2 // 最多追踪两只手
