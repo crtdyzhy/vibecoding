@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D 乐高构建器 - 完美触控版</title>
+    <title>3D 乐高构建器 - 坐标修复版</title>
     <style>
         :root {
             --ui-bg: rgba(255, 255, 255, 0.95);
@@ -16,6 +16,7 @@
             overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #e0e0e0;
+            /* 关键：阻止浏览器默认的触摸行为，让 Three.js 独占 */
             touch-action: none;
             -webkit-user-select: none;
             user-select: none;
@@ -190,9 +191,8 @@
         let isDeleteMode = false;
         let isMobile = window.innerWidth < 769;
 
-        // 核心交互变量：用于区分拖拽和点击
         let pointerDownPos = new THREE.Vector2();
-        let isOrbiting = false; // 是否正在旋转视角
+        let isOrbiting = false;
 
         const colors = [
             0xd01010, 0x0055bf, 0xffd010, 0x008f30, 0xffffff, 
@@ -240,10 +240,8 @@
             updateBrickMaterial();
             initRollOverMesh();
 
-            // 绑定事件 - 使用 Pointer Events 统一鼠标和触摸
             const canvas = renderer.domElement;
             canvas.addEventListener('pointermove', onPointerMove);
-            // 关键修改：分开 down 和 up 处理
             canvas.addEventListener('pointerdown', onPointerDown);
             canvas.addEventListener('pointerup', onPointerUp);
             
@@ -257,7 +255,6 @@
             controls.dampingFactor = 0.1;
             controls.rotateSpeed = 0.7; 
             
-            // 监听控制器状态，旋转时隐藏预览框，避免视觉干扰
             controls.addEventListener('start', () => { isOrbiting = true; rollOverMesh.visible = false; });
             controls.addEventListener('end', () => { isOrbiting = false; updateRollOverVisibility(); });
         }
@@ -344,21 +341,17 @@
             return group;
         }
 
-        // --- 核心交互逻辑修改 ---
-
         function onPointerDown(event) {
-            // 记录按下的位置，不做任何放置操作
             if(event.target.closest('.ui-area')) return;
             pointerDownPos.set(event.clientX, event.clientY);
         }
 
         function onPointerMove(event) {
-            // 更新鼠标位置，用于射线检测
+            // 在移动时更新鼠标位置，确保预览框跟随手指
             updatePointerPosition(event);
 
-            // 如果正在旋转视角，不进行射线检测，直接返回
             if (isOrbiting) return;
-            if (isMobile && !event.isPrimary) return; // 忽略多指操作
+            if (isMobile && !event.isPrimary) return;
 
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(objects, true);
@@ -395,16 +388,14 @@
         function onPointerUp(event) {
             if(event.target.closest('.ui-area')) return;
             
-            // 1. 计算移动距离
             const moveX = Math.abs(event.clientX - pointerDownPos.x);
             const moveY = Math.abs(event.clientY - pointerDownPos.y);
             const distance = Math.sqrt(moveX * moveX + moveY * moveY);
 
-            // 2. 阈值判断：如果移动超过 5 像素，认为是拖拽(旋转视角)，不执行放置/删除
+            // 如果移动超过 5 像素，认为是拖拽(旋转视角)，不执行放置/删除
             if (distance > 5) return;
 
-            // 3. 执行点击逻辑 (放置或删除)
-            // 此时重新进行一次射线检测，确保位置最准确
+            // 关键：在放置前再次更新鼠标位置，确保使用最终点击的坐标
             updatePointerPosition(event);
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(objects, true);
@@ -412,7 +403,6 @@
             if (intersects.length > 0) {
                 const intersect = intersects[0];
 
-                // 删除模式
                 if (event.shiftKey || isDeleteMode) {
                     let target = intersect.object;
                     while(target.parent && target.parent !== scene) {
@@ -427,13 +417,13 @@
                     return;
                 }
 
-                // 放置模式
                 const wUnits = isRotated ? currentBrickSize.d : currentBrickSize.w;
                 const dUnits = isRotated ? currentBrickSize.w : currentBrickSize.d;
                 
                 const brick = createLegoBrick(wUnits, dUnits);
-                // 确保对齐
-                onPointerMove(event); 
+                
+                // 确保对齐：手动运行一次 onPointerMove 的坐标计算逻辑
+                // onPointerMove(event) 已经运行了，这里直接使用 rollOverMesh.position
                 brick.position.copy(rollOverMesh.position);
                 
                 scene.add(brick);
@@ -441,18 +431,34 @@
                 if(isMobile && navigator.vibrate) navigator.vibrate(15);
             }
         }
-
-        function updatePointerPosition(event) {
-            let clientX = event.clientX;
-            let clientY = event.clientY;
-            if (event.isPrimary === false && event.touches && event.touches.length > 0) {
-                 // 处理某些边缘情况
-            }
-            mouse.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
-        }
         
+        // --- 坐标获取修复函数 ---
+        function updatePointerPosition(event) {
+            let x = event.clientX;
+            let y = event.clientY;
+
+            // FIX: 针对移动设备上快速点击时 event.clientX/Y 可能不准确的问题。
+            // 检查是否有 touches 数组（Touch Event 属性），如果有则使用第一个触点。
+            if (event.touches && event.touches.length > 0) {
+                x = event.touches[0].clientX;
+                y = event.touches[0].clientY;
+            } else if (event.changedTouches && event.changedTouches.length > 0) {
+                // For pointerup/touchend, sometimes the coordinates are in changedTouches
+                x = event.changedTouches[0].clientX;
+                y = event.changedTouches[0].clientY;
+            }
+            
+            // 只有当坐标有效时才更新 mouse 向量
+            if (x !== undefined && y !== undefined) {
+                mouse.set(
+                    (x / window.innerWidth) * 2 - 1,
+                    -(y / window.innerHeight) * 2 + 1
+                );
+            }
+        }
+        // ------------------------
+
         function updateRollOverVisibility() {
-            // 只有在非删除模式且非轨道旋转时才显示预览
             if (!isDeleteMode && !isOrbiting) {
                 rollOverMesh.visible = true;
             } else {
@@ -478,7 +484,7 @@
             renderer.render(scene, camera);
         }
 
-        // --- 全局 UI 逻辑 ---
+        // --- UI 逻辑（保持不变） ---
         window.rotateBrick = function() {
             isRotated = !isRotated;
             rollOverMesh.rotation.y = isRotated ? -Math.PI / 2 : 0;
