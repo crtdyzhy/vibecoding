@@ -2,268 +2,574 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Android 手势追踪 Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D 乐高构建器 - 完美触控版</title>
     <style>
+        :root {
+            --ui-bg: rgba(255, 255, 255, 0.95);
+            --ui-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            --primary-color: #007bff;
+            --danger-color: #d9534f;
+        }
         body {
             margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: #222;
-            color: white;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
             overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #e0e0e0;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+            outline: none;
         }
 
-        h1 {
-            font-size: 1.2rem;
-            margin-bottom: 10px;
+        /* --- UI 样式保持不变 --- */
+        .ui-panel-base {
+            background: var(--ui-bg);
+            padding: 12px;
+            border-radius: 12px;
+            box-shadow: var(--ui-shadow);
+            backdrop-filter: blur(5px);
             z-index: 10;
         }
 
-        /* 视频容器，保证视频和画布重叠 */
-        .container {
-            position: relative;
-            width: 100%;
-            max-width: 600px; /* 限制最大宽度，适配平板 */
-            aspect-ratio: 3/4; /* 竖屏常用比例 */
-            background: #000;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        h2 { margin: 0 0 10px 0; font-size: 16px; color: #333; border-bottom: 1px solid #eee; padding-bottom: 5px;}
+        h3 { font-size: 13px; color: #666; margin: 10px 0 5px 0;}
+        label { font-size: 12px; font-weight: bold; display: block; margin-bottom: 3px;}
+
+        .scroll-container {
+            display: flex; gap: 8px; overflow-x: auto; padding: 5px 2px;
+            scrollbar-width: none; -ms-overflow-style: none;
+        }
+        .scroll-container::-webkit-scrollbar { display: none; }
+
+        .color-btn {
+            flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%; 
+            border: 3px solid #fff; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: transform 0.1s;
+        }
+        .color-btn.active { border-color: #333; transform: scale(1.1); }
+
+        .size-btn {
+            flex: 0 0 auto; padding: 6px 12px; border: 1px solid #ccc; background: #f8f8f8;
+            cursor: pointer; font-size: 13px; border-radius: 20px; font-weight: 500;
+        }
+        .size-btn.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+
+        .action-btn {
+            padding: 10px; background: var(--primary-color); color: white; border: none;
+            border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .action-btn:active { filter: brightness(0.9); }
+        .btn-danger { background: var(--danger-color); }
+        .btn-danger.active { background: #c9302c; box-shadow: inset 0 3px 5px rgba(0,0,0,0.2); }
+
+        input[type="number"] { width: 50px; padding: 6px; border: 1px solid #ccc; border-radius: 6px; text-align: center;}
+
+        #desktop-sidebar {
+            display: none; position: absolute; top: 10px; left: 10px; width: 240px; max-height: 90vh; overflow-y: auto;
         }
 
-        video {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1); /* 镜像翻转，像照镜子一样 */
-        }
-
-        canvas {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1); /* 画布也要镜像翻转以匹配视频 */
-            z-index: 2;
-        }
-
-        #status {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.7);
-            padding: 20px;
-            border-radius: 8px;
-            text-align: center;
-            z-index: 5;
-        }
-
-        button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            font-size: 1rem;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-
-        button:disabled {
-            background-color: #555;
-            cursor: not-allowed;
+        #mobile-toolbar {
+            position: absolute; bottom: 0; left: 0; width: 100%;
+            border-radius: 16px 16px 0 0; padding-bottom: env(safe-area-inset-bottom, 10px);
+            display: flex; flex-direction: column; gap: 10px;
         }
         
-        .info-panel {
-            margin-top: 10px;
-            font-size: 0.8rem;
-            color: #aaa;
-            text-align: center;
+        .main-actions { display: flex; gap: 10px; }
+        .main-actions .action-btn { flex: 1; height: 44px; }
+
+        #settings-toggle-btn {
+            position: absolute; top: 10px; right: 10px; z-index: 20;
+            padding: 8px; background: white; border-radius: 8px; box-shadow: var(--ui-shadow); cursor: pointer;
+        }
+
+        #mobile-settings-panel {
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 80%; max-width: 300px; z-index: 30;
+        }
+
+        @media (min-width: 769px) {
+            #desktop-sidebar { display: block; }
+            #mobile-toolbar { display: none; }
+            #settings-toggle-btn { display: none; }
+            .scroll-container { flex-wrap: wrap; overflow-x: visible; justify-content: flex-start;}
         }
     </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
 </head>
 <body>
 
-    <h1>👋 安卓手势追踪</h1>
-
-    <div class="container">
-        <div id="status">
-            <p id="status-text">正在加载模型 (约需几秒)...</p>
-            <button id="webcamButton" disabled>开启摄像头</button>
+    <div id="desktop-sidebar" class="ui-panel-base ui-area">
+        <h2>乐高构建器 (PC)</h2>
+        <div id="desktop-controls-container"></div>
+        <div class="control-group">
+             <h3>说明</h3>
+             <div style="font-size: 11px; color: #666; background: #eee; padding: 8px; border-radius: 4px;">
+                 左键点击: 放置<br>拖动: 旋转视角<br>R键: 旋转积木
+             </div>
         </div>
-        
-        <video id="webcam" autoplay playsinline></video>
-        <canvas id="output_canvas"></canvas>
     </div>
 
-    <div class="info-panel">
-        请允许摄像头权限 • 保持手在画面内<br>
-        Powered by MediaPipe
+    <div id="settings-toggle-btn" class="ui-area" onclick="toggleSettingsPanel()">⚙️ 设置</div>
+
+    <div id="mobile-settings-panel" class="ui-panel-base ui-area">
+        <h2>场景设置</h2>
+        <div id="settings-controls-container"></div>
+        <button class="action-btn btn-danger" style="margin-top:15px; width:100%" onclick="toggleSettingsPanel()">关闭</button>
+    </div>
+
+    <div id="mobile-toolbar" class="ui-panel-base ui-area">
+        <div class="main-actions">
+            <button class="action-btn" id="btn-rotate" onclick="rotateBrick()">🔄 旋转</button>
+            <button class="action-btn btn-danger" id="btn-delete-mode" onclick="toggleDeleteMode()">🗑️ 删除: 关</button>
+        </div>
+        <div id="color-container-wrapper"></div>
+        <div id="size-container-wrapper"></div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div style="display:none;">
+        <div id="tpl-color-controls" class="control-group">
+            <h3>颜色</h3><div class="scroll-container" id="color-palette"></div>
+        </div>
+        <div id="tpl-size-controls" class="control-group">
+            <h3>尺寸</h3>
+            <div class="scroll-container" id="size-controls">
+                <button class="size-btn active" data-w="1" data-d="1">1x1</button>
+                <button class="size-btn" data-w="2" data-d="1">2x1</button>
+                <button class="size-btn" data-w="3" data-d="1">3x1</button>
+                <button class="size-btn" data-w="4" data-d="1">4x1</button>
+                <button class="size-btn" data-w="2" data-d="2">2x2</button>
+                <button class="size-btn" data-w="2" data-d="4">2x4</button>
+                <button class="size-btn" data-w="4" data-d="4">4x4</button>
+            </div>
+        </div>
+        <div id="tpl-settings-controls" class="control-group">
+            <h3>底板设置</h3>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <div><label>宽</label><input type="number" id="base-w" value="20" min="5" max="100"></div>
+                <div><label>深</label><input type="number" id="base-d" value="20" min="5" max="100"></div>
+                <button class="action-btn" style="flex:1; background:#28a745;" onclick="updateBaseplate()">更新</button>
+            </div>
+            <button class="action-btn btn-danger" style="width:100%;" onclick="clearScene()">清空所有</button>
+        </div>
     </div>
 
     <script type="module">
-        import {
-            FilesetResolver,
-            HandLandmarker
-        } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0";
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        const video = document.getElementById("webcam");
-        const canvasElement = document.getElementById("output_canvas");
-        const canvasCtx = canvasElement.getContext("2d");
-        const statusText = document.getElementById("status-text");
-        const enableWebcamButton = document.getElementById("webcamButton");
-        const statusDiv = document.getElementById("status");
-
-        let handLandmarker = undefined;
-        let webcamRunning = false;
-        let lastVideoTime = -1;
-        let results = undefined;
-
-        // 1. 初始化 HandLandmarker 模型
-        const createHandLandmarker = async () => {
-            try {
-                const vision = await FilesetResolver.forVisionTasks(
-                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
-                );
-                
-                handLandmarker = await HandLandmarker.createFromOptions(vision, {
-                    baseOptions: {
-                        modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
-                        delegate: "CPU" // 使用 GPU 加速，这对手机很重要
-                    },
-                    runningMode: "VIDEO",
-                    numHands: 2 // 最多追踪两只手
-                });
-
-                statusText.innerText = "模型加载完毕！";
-                enableWebcamButton.disabled = false;
-                enableWebcamButton.innerText = "点击开启摄像头";
-            } catch (error) {
-                statusText.innerText = "加载失败: " + error;
-                console.error(error);
-            }
-        };
-
-        createHandLandmarker();
-
-        // 2. 检查浏览器支持情况
-        const hasGetUserMedia = () => !!navigator.mediaDevices?.getUserMedia;
-
-        if (hasGetUserMedia()) {
-            enableWebcamButton.addEventListener("click", enableCam);
-        } else {
-            console.warn("getUserMedia() is not supported by your browser");
-            statusText.innerText = "您的浏览器不支持摄像头调用。";
-        }
-
-        // 3. 开启摄像头功能
-        function enableCam(event) {
-            if (!handLandmarker) {
-                console.log("Wait! objectDetector not loaded yet.");
-                return;
-            }
-
-            if (webcamRunning === true) {
-                webcamRunning = false;
-                enableWebcamButton.innerText = "开启摄像头";
-            } else {
-                webcamRunning = true;
-                enableWebcamButton.style.display = "none"; // 隐藏按钮
-                statusDiv.style.display = "none"; // 隐藏遮罩
-                
-                // 针对手机优化：优先使用前置摄像头
-                const constraints = {
-                    video: {
-                        facingMode: "user",
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    }
-                };
-
-                navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
-                    video.srcObject = stream;
-                    video.addEventListener("loadeddata", predictWebcam);
-                });
-            }
-        }
-
-        // 4. 实时预测循环
-        async function predictWebcam() {
-            // 调整 Canvas 尺寸匹配视频流尺寸
-            if(canvasElement.width !== video.videoWidth || canvasElement.height !== video.videoHeight){
-                canvasElement.width = video.videoWidth;
-                canvasElement.height = video.videoHeight;
-            }
-
-            let startTimeMs = performance.now();
-            
-            if (lastVideoTime !== video.currentTime) {
-                lastVideoTime = video.currentTime;
-                results = handLandmarker.detectForVideo(video, startTimeMs);
-            }
-
-            canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-            // 如果检测到手
-            if (results.landmarks) {
-                for (const landmarks of results.landmarks) {
-                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: "#00FF00", lineWidth: 3 });
-                    drawLandmarks(canvasCtx, landmarks, { color: "#FF0000", lineWidth: 1 });
-                }
-            }
-            canvasCtx.restore();
-
-            // 只要摄像头开着，就持续调用
-            if (webcamRunning === true) {
-                window.requestAnimationFrame(predictWebcam);
-            }
-        }
-
-        // --- 简单的绘图辅助函数 (避免引入额外的庞大绘图库) ---
+        let scene, camera, renderer, raycaster, mouse, controls;
+        let plane, gridHelper;
+        let rollOverMesh, rollOverMaterial;
+        let brickMaterialPhong;
+        const objects = [];
         
-        // 手部连接关系索引
-        const HAND_CONNECTIONS = [
-            [0, 1], [1, 2], [2, 3], [3, 4], // 拇指
-            [0, 5], [5, 6], [6, 7], [7, 8], // 食指
-            [5, 9], [9, 10], [10, 11], [11, 12], // 中指
-            [9, 13], [13, 14], [14, 15], [15, 16], // 无名指
-            [13, 17], [0, 17], [17, 18], [18, 19], [19, 20] // 小指 + 手掌根
+        const unitSize = 20;
+        let currentBrickColor = 0xd01010;
+        let currentBrickSize = { w: 1, d: 1, h: 1.2 };
+        let isRotated = false;
+        let isDeleteMode = false;
+        let isMobile = window.innerWidth < 769;
+
+        // 核心交互变量：用于区分拖拽和点击
+        let pointerDownPos = new THREE.Vector2();
+        let isOrbiting = false; // 是否正在旋转视角
+
+        const colors = [
+            0xd01010, 0x0055bf, 0xffd010, 0x008f30, 0xffffff, 
+            0x111111, 0x9ba1a6, 0xff8010, 0x8a2be2
         ];
 
-        function drawConnectors(ctx, landmarks, connections, style) {
-            ctx.strokeStyle = style.color || "white";
-            ctx.lineWidth = style.lineWidth || 2;
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xeaddca);
+            scene.fog = new THREE.Fog(0xeaddca, 1000, 5000);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10000);
+            camera.position.set(600, 800, 1000);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.useLegacyLights = false;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffeedd, 0.8);
+            scene.add(ambientLight);
+
+            const mainLight = new THREE.DirectionalLight(0xffffff, 2.0);
+            mainLight.position.set(100, 200, 100);
+            mainLight.castShadow = true;
+            mainLight.shadow.mapSize.width = 2048; 
+            mainLight.shadow.mapSize.height = 2048;
+            scene.add(mainLight);
             
-            for (const connection of connections) {
-                const start = landmarks[connection[0]];
-                const end = landmarks[connection[1]];
+            const fillLight = new THREE.DirectionalLight(0xccccff, 0.5);
+            fillLight.position.set(-100, 50, -100);
+            scene.add(fillLight);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            createBaseplate(20, 20);
+            updateBrickMaterial();
+            initRollOverMesh();
+
+            // 绑定事件 - 使用 Pointer Events 统一鼠标和触摸
+            const canvas = renderer.domElement;
+            canvas.addEventListener('pointermove', onPointerMove);
+            // 关键修改：分开 down 和 up 处理
+            canvas.addEventListener('pointerdown', onPointerDown);
+            canvas.addEventListener('pointerup', onPointerUp);
+            
+            document.addEventListener('keydown', onDocumentKeyDown);
+            window.addEventListener('resize', onWindowResize);
+
+            initUI();
+
+            controls = new OrbitControls(camera, canvas);
+            controls.enableDamping = true; 
+            controls.dampingFactor = 0.1;
+            controls.rotateSpeed = 0.7; 
+            
+            // 监听控制器状态，旋转时隐藏预览框，避免视觉干扰
+            controls.addEventListener('start', () => { isOrbiting = true; rollOverMesh.visible = false; });
+            controls.addEventListener('end', () => { isOrbiting = false; updateRollOverVisibility(); });
+        }
+
+        function updateBrickMaterial() {
+            brickMaterialPhong = new THREE.MeshPhongMaterial({
+                color: currentBrickColor,
+                specular: 0x666666,
+                shininess: 80,
+                flatShading: false
+            });
+        }
+
+        function createBaseplate(widthUnits, depthUnits) {
+            if(plane) scene.remove(plane);
+            if(gridHelper) scene.remove(gridHelper);
+            const oldPlaneIndex = objects.findIndex(obj => obj.userData.isGround);
+            if(oldPlaneIndex > -1) objects.splice(oldPlaneIndex, 1);
+
+            const w = widthUnits * unitSize;
+            const d = depthUnits * unitSize;
+
+            gridHelper = new THREE.GridHelper(Math.max(w, d), Math.max(widthUnits, depthUnits), 0xbbbbbb, 0xdddddd);
+            scene.add(gridHelper);
+
+            const geometry = new THREE.PlaneGeometry(w, d);
+            geometry.rotateX(-Math.PI / 2);
+            plane = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ color: 0xf0f0f0, specular: 0x111111, shininess: 10 }));
+            plane.receiveShadow = true;
+            plane.userData = { isGround: true };
+            scene.add(plane);
+            objects.push(plane);
+        }
+
+        function initRollOverMesh() {
+            if(rollOverMesh) scene.remove(rollOverMesh);
+            rollOverMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: 0.5, transparent: true, depthTest: false });
+            
+            const wUnits = isRotated ? currentBrickSize.d : currentBrickSize.w;
+            const dUnits = isRotated ? currentBrickSize.w : currentBrickSize.d;
+            const w = wUnits * unitSize;
+            const d = dUnits * unitSize;
+            const h = currentBrickSize.h * unitSize;
+
+            const geo = new THREE.BoxGeometry(w, h, d);
+            geo.translate(0, h / 2, 0);
+            rollOverMesh = new THREE.Mesh(geo, rollOverMaterial);
+            rollOverMesh.renderOrder = 999; 
+            scene.add(rollOverMesh);
+        }
+
+        function createLegoBrick(sizeW, sizeD) {
+            const w = sizeW * unitSize;
+            const d = sizeD * unitSize;
+            const h = 1.2 * unitSize;
+
+            const group = new THREE.Group();
+            const baseGeo = new THREE.BoxGeometry(w, h, d);
+            baseGeo.translate(0, h / 2, 0);
+            const baseMesh = new THREE.Mesh(baseGeo, brickMaterialPhong);
+            baseMesh.castShadow = true;
+            baseMesh.receiveShadow = true;
+            group.add(baseMesh);
+
+            const studGeo = new THREE.CylinderGeometry(4.2, 4.2, 3.5, 32);
+            studGeo.translate(0, 3.5 / 2, 0);
+
+            const startX = -(w/2) + unitSize/2;
+            const startZ = -(d/2) + unitSize/2;
+
+            for(let i=0; i<sizeW; i++) {
+                for(let j=0; j<sizeD; j++) {
+                    const stud = new THREE.Mesh(studGeo, brickMaterialPhong);
+                    stud.position.x = startX + i * unitSize;
+                    stud.position.z = startZ + j * unitSize;
+                    stud.position.y = h - 0.1; 
+                    stud.castShadow = true;
+                    stud.receiveShadow = true;
+                    group.add(stud);
+                }
+            }
+
+            group.userData = { isBrick: true, wUnits: sizeW, dUnits: sizeD };
+            return group;
+        }
+
+        // --- 核心交互逻辑修改 ---
+
+        function onPointerDown(event) {
+            // 记录按下的位置，不做任何放置操作
+            if(event.target.closest('.ui-area')) return;
+            pointerDownPos.set(event.clientX, event.clientY);
+        }
+
+        function onPointerMove(event) {
+            // 更新鼠标位置，用于射线检测
+            updatePointerPosition(event);
+
+            // 如果正在旋转视角，不进行射线检测，直接返回
+            if (isOrbiting) return;
+            if (isMobile && !event.isPrimary) return; // 忽略多指操作
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(objects, true);
+
+            if (intersects.length > 0) {
+                const intersect = intersects[0];
+                const normal = intersect.face.normal;
                 
-                // 坐标是归一化的 (0-1)，需要乘以画布宽高
-                ctx.beginPath();
-                ctx.moveTo(start.x * ctx.canvas.width, start.y * ctx.canvas.height);
-                ctx.lineTo(end.x * ctx.canvas.width, end.y * ctx.canvas.height);
-                ctx.stroke();
+                const voxelPos = new THREE.Vector3().copy(intersect.point).add(normal.clone().multiplyScalar(unitSize * 0.1));
+                
+                rollOverMesh.position.x = Math.floor(voxelPos.x / unitSize) * unitSize + unitSize / 2;
+                rollOverMesh.position.z = Math.floor(voxelPos.z / unitSize) * unitSize + unitSize / 2;
+                
+                if (intersect.object.userData.isGround || (intersect.object.parent && intersect.object.parent.userData.isGround)) {
+                    rollOverMesh.position.y = 0;
+                } else {
+                    rollOverMesh.position.y = Math.floor(intersect.point.y / unitSize) * unitSize;
+                    if(normal.y > 0.8 && (intersect.point.y % unitSize) > unitSize * 0.8 ) {
+                         rollOverMesh.position.y += unitSize;
+                    }
+                }
+
+                const wUnits = isRotated ? currentBrickSize.d : currentBrickSize.w;
+                const dUnits = isRotated ? currentBrickSize.w : currentBrickSize.d;
+                if (wUnits % 2 === 0) rollOverMesh.position.x += unitSize / 2;
+                if (dUnits % 2 === 0) rollOverMesh.position.z += unitSize / 2;
+
+                updateRollOverVisibility();
+            } else {
+                 if(!isDeleteMode) rollOverMesh.visible = false;
             }
         }
 
-        function drawLandmarks(ctx, landmarks, style) {
-            ctx.fillStyle = style.color || "red";
-            for (const landmark of landmarks) {
-                const x = landmark.x * ctx.canvas.width;
-                const y = landmark.y * ctx.canvas.height;
+        function onPointerUp(event) {
+            if(event.target.closest('.ui-area')) return;
+            
+            // 1. 计算移动距离
+            const moveX = Math.abs(event.clientX - pointerDownPos.x);
+            const moveY = Math.abs(event.clientY - pointerDownPos.y);
+            const distance = Math.sqrt(moveX * moveX + moveY * moveY);
+
+            // 2. 阈值判断：如果移动超过 5 像素，认为是拖拽(旋转视角)，不执行放置/删除
+            if (distance > 5) return;
+
+            // 3. 执行点击逻辑 (放置或删除)
+            // 此时重新进行一次射线检测，确保位置最准确
+            updatePointerPosition(event);
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(objects, true);
+
+            if (intersects.length > 0) {
+                const intersect = intersects[0];
+
+                // 删除模式
+                if (event.shiftKey || isDeleteMode) {
+                    let target = intersect.object;
+                    while(target.parent && target.parent !== scene) {
+                        if(target.userData.isBrick || target.userData.isGround) break;
+                        target = target.parent;
+                    }
+                    if (target.userData.isBrick) {
+                        scene.remove(target);
+                        objects.splice(objects.indexOf(target), 1);
+                        if(isMobile && navigator.vibrate) navigator.vibrate(30);
+                    }
+                    return;
+                }
+
+                // 放置模式
+                const wUnits = isRotated ? currentBrickSize.d : currentBrickSize.w;
+                const dUnits = isRotated ? currentBrickSize.w : currentBrickSize.d;
                 
-                ctx.beginPath();
-                ctx.arc(x, y, 4, 0, 2 * Math.PI); // 画半径为4的圆点
-                ctx.fill();
+                const brick = createLegoBrick(wUnits, dUnits);
+                // 确保对齐
+                onPointerMove(event); 
+                brick.position.copy(rollOverMesh.position);
+                
+                scene.add(brick);
+                objects.push(brick);
+                if(isMobile && navigator.vibrate) navigator.vibrate(15);
+            }
+        }
+
+        function updatePointerPosition(event) {
+            let clientX = event.clientX;
+            let clientY = event.clientY;
+            if (event.isPrimary === false && event.touches && event.touches.length > 0) {
+                 // 处理某些边缘情况
+            }
+            mouse.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
+        }
+        
+        function updateRollOverVisibility() {
+            // 只有在非删除模式且非轨道旋转时才显示预览
+            if (!isDeleteMode && !isOrbiting) {
+                rollOverMesh.visible = true;
+            } else {
+                rollOverMesh.visible = false;
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            isMobile = window.innerWidth < 769;
+            adjustUILayout();
+        }
+
+        function onDocumentKeyDown(event) {
+            if (event.code === 'KeyR') rotateBrick();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // --- 全局 UI 逻辑 ---
+        window.rotateBrick = function() {
+            isRotated = !isRotated;
+            rollOverMesh.rotation.y = isRotated ? -Math.PI / 2 : 0;
+            initRollOverMesh();
+            rollOverMesh.rotation.y = isRotated ? -Math.PI / 2 : 0; 
+        }
+
+        window.toggleDeleteMode = function() {
+            isDeleteMode = !isDeleteMode;
+            const btn = document.getElementById('btn-delete-mode');
+            if(isDeleteMode) {
+                btn.classList.add('active');
+                btn.innerHTML = '🗑️ 删除模式: 开';
+                document.body.style.cursor = 'not-allowed';
+            } else {
+                btn.classList.remove('active');
+                btn.innerHTML = '🗑️ 删除模式: 关';
+                document.body.style.cursor = 'auto';
+            }
+            updateRollOverVisibility();
+        }
+        
+        window.updateBaseplate = function() {
+            const w = parseInt(document.getElementById('base-w').value) || 20;
+            const d = parseInt(document.getElementById('base-d').value) || 20;
+            createBaseplate(w, d);
+            if(isMobile) toggleSettingsPanel();
+        }
+
+        window.clearScene = function() {
+            if(!confirm('确定要清空所有积木吗？')) return;
+            for (let i = objects.length - 1; i >= 0; i--) {
+                const obj = objects[i];
+                if (obj.userData.isBrick) {
+                    scene.remove(obj);
+                    objects.splice(i, 1);
+                }
+            }
+            if(isMobile) toggleSettingsPanel();
+        }
+
+        window.toggleSettingsPanel = function() {
+            const panel = document.getElementById('mobile-settings-panel');
+            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function initUI() {
+            const palette = document.getElementById('color-palette');
+            colors.forEach((c, index) => {
+                const btn = document.createElement('div');
+                btn.className = 'color-btn' + (index === 0 ? ' active' : '');
+                btn.style.backgroundColor = '#' + c.toString(16).padStart(6, '0');
+                btn.onclick = () => {
+                    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentBrickColor = c;
+                    updateBrickMaterial();
+                    rollOverMesh.material.color.setHex(c);
+                };
+                palette.appendChild(btn);
+            });
+
+            const sizeBtns = document.querySelectorAll('.size-btn');
+            sizeBtns.forEach(btn => {
+                btn.onclick = () => {
+                    sizeBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentBrickSize.w = parseInt(btn.dataset.w);
+                    currentBrickSize.d = parseInt(btn.dataset.d);
+                    isRotated = false;
+                    rollOverMesh.rotation.y = 0;
+                    initRollOverMesh();
+                };
+            });
+            adjustUILayout();
+        }
+
+        function adjustUILayout() {
+            const colorControls = document.getElementById('tpl-color-controls');
+            const sizeControls = document.getElementById('tpl-size-controls');
+            const settingsControls = document.getElementById('tpl-settings-controls');
+
+            if (isMobile) {
+                document.getElementById('color-container-wrapper').appendChild(colorControls);
+                document.getElementById('size-container-wrapper').appendChild(sizeControls);
+                document.getElementById('settings-controls-container').appendChild(settingsControls);
+            } else {
+                const desktopContainer = document.getElementById('desktop-controls-container');
+                desktopContainer.appendChild(colorControls);
+                desktopContainer.appendChild(sizeControls);
+                desktopContainer.appendChild(settingsControls);
             }
         }
     </script>
