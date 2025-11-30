@@ -2,582 +2,202 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D 乐高构建器 - 坐标修复版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Isometric ARPG Portrait Mode</title>
     <style>
-        :root {
-            --ui-bg: rgba(255, 255, 255, 0.95);
-            --ui-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            --primary-color: #007bff;
-            --danger-color: #d9534f;
+        html, body { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            overflow: hidden; background: #222; touch-action: none; 
         }
-        body {
-            margin: 0;
-            overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #e0e0e0;
-            /* 关键：阻止浏览器默认的触摸行为，让 Three.js 独占 */
-            touch-action: none;
-            -webkit-user-select: none;
-            user-select: none;
-        }
-        
-        #canvas-container {
-            width: 100vw;
-            height: 100vh;
-            display: block;
-            position: absolute;
-            top: 0; left: 0;
-            z-index: 1;
-            outline: none;
-        }
-
-        /* --- UI 样式保持不变 --- */
-        .ui-panel-base {
-            background: var(--ui-bg);
-            padding: 12px;
-            border-radius: 12px;
-            box-shadow: var(--ui-shadow);
-            backdrop-filter: blur(5px);
-            z-index: 10;
-        }
-
-        h2 { margin: 0 0 10px 0; font-size: 16px; color: #333; border-bottom: 1px solid #eee; padding-bottom: 5px;}
-        h3 { font-size: 13px; color: #666; margin: 10px 0 5px 0;}
-        label { font-size: 12px; font-weight: bold; display: block; margin-bottom: 3px;}
-
-        .scroll-container {
-            display: flex; gap: 8px; overflow-x: auto; padding: 5px 2px;
-            scrollbar-width: none; -ms-overflow-style: none;
-        }
-        .scroll-container::-webkit-scrollbar { display: none; }
-
-        .color-btn {
-            flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%; 
-            border: 3px solid #fff; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            transition: transform 0.1s;
-        }
-        .color-btn.active { border-color: #333; transform: scale(1.1); }
-
-        .size-btn {
-            flex: 0 0 auto; padding: 6px 12px; border: 1px solid #ccc; background: #f8f8f8;
-            cursor: pointer; font-size: 13px; border-radius: 20px; font-weight: 500;
-        }
-        .size-btn.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
-
-        .action-btn {
-            padding: 10px; background: var(--primary-color); color: white; border: none;
-            border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px;
-            display: flex; align-items: center; justify-content: center;
-        }
-        .action-btn:active { filter: brightness(0.9); }
-        .btn-danger { background: var(--danger-color); }
-        .btn-danger.active { background: #c9302c; box-shadow: inset 0 3px 5px rgba(0,0,0,0.2); }
-
-        input[type="number"] { width: 50px; padding: 6px; border: 1px solid #ccc; border-radius: 6px; text-align: center;}
-
-        #desktop-sidebar {
-            display: none; position: absolute; top: 10px; left: 10px; width: 240px; max-height: 90vh; overflow-y: auto;
-        }
-
-        #mobile-toolbar {
-            position: absolute; bottom: 0; left: 0; width: 100%;
-            border-radius: 16px 16px 0 0; padding-bottom: env(safe-area-inset-bottom, 10px);
-            display: flex; flex-direction: column; gap: 10px;
-        }
-        
-        .main-actions { display: flex; gap: 10px; }
-        .main-actions .action-btn { flex: 1; height: 44px; }
-
-        #settings-toggle-btn {
-            position: absolute; top: 10px; right: 10px; z-index: 20;
-            padding: 8px; background: white; border-radius: 8px; box-shadow: var(--ui-shadow); cursor: pointer;
-        }
-
-        #mobile-settings-panel {
-            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 80%; max-width: 300px; z-index: 30;
-        }
-
-        @media (min-width: 769px) {
-            #desktop-sidebar { display: block; }
-            #mobile-toolbar { display: none; }
-            #settings-toggle-btn { display: none; }
-            .scroll-container { flex-wrap: wrap; overflow-x: visible; justify-content: flex-start;}
-        }
+        canvas { display: block; touch-action: none; }
+        /* 移除之前的旋转提示CSS */
     </style>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/phaser3-rex-plugins@1.1.91/dist/rexvirtualjoystickplugin.min.js"></script>
 </head>
 <body>
 
-    <div id="desktop-sidebar" class="ui-panel-base ui-area">
-        <h2>乐高构建器 (PC)</h2>
-        <div id="desktop-controls-container"></div>
-        <div class="control-group">
-             <h3>说明</h3>
-             <div style="font-size: 11px; color: #666; background: #eee; padding: 8px; border-radius: 4px;">
-                 左键点击: 放置<br>拖动: 旋转视角<br>R键: 旋转积木
-             </div>
-        </div>
-    </div>
+<div id="game-container"></div>
 
-    <div id="settings-toggle-btn" class="ui-area" onclick="toggleSettingsPanel()">⚙️ 设置</div>
+<script>
+const CONFIG = {
+    moveSpeed: 160,
+    playerColor: 0x00ff00, 
+    enemyColor: 0xff0000,
+};
 
-    <div id="mobile-settings-panel" class="ui-panel-base ui-area">
-        <h2>场景设置</h2>
-        <div id="settings-controls-container"></div>
-        <button class="action-btn btn-danger" style="margin-top:15px; width:100%" onclick="toggleSettingsPanel()">关闭</button>
-    </div>
+class MainScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'MainScene' });
+    }
 
-    <div id="mobile-toolbar" class="ui-panel-base ui-area">
-        <div class="main-actions">
-            <button class="action-btn" id="btn-rotate" onclick="rotateBrick()">🔄 旋转</button>
-            <button class="action-btn btn-danger" id="btn-delete-mode" onclick="toggleDeleteMode()">🗑️ 删除: 关</button>
-        </div>
-        <div id="color-container-wrapper"></div>
-        <div id="size-container-wrapper"></div>
-    </div>
+    create() {
+        // 1. 背景与世界
+        this.createIsoBackground();
 
-    <div id="canvas-container"></div>
-
-    <div style="display:none;">
-        <div id="tpl-color-controls" class="control-group">
-            <h3>颜色</h3><div class="scroll-container" id="color-palette"></div>
-        </div>
-        <div id="tpl-size-controls" class="control-group">
-            <h3>尺寸</h3>
-            <div class="scroll-container" id="size-controls">
-                <button class="size-btn active" data-w="1" data-d="1">1x1</button>
-                <button class="size-btn" data-w="2" data-d="1">2x1</button>
-                <button class="size-btn" data-w="3" data-d="1">3x1</button>
-                <button class="size-btn" data-w="4" data-d="1">4x1</button>
-                <button class="size-btn" data-w="2" data-d="2">2x2</button>
-                <button class="size-btn" data-w="2" data-d="4">2x4</button>
-                <button class="size-btn" data-w="4" data-d="4">4x4</button>
-            </div>
-        </div>
-        <div id="tpl-settings-controls" class="control-group">
-            <h3>底板设置</h3>
-            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                <div><label>宽</label><input type="number" id="base-w" value="20" min="5" max="100"></div>
-                <div><label>深</label><input type="number" id="base-d" value="20" min="5" max="100"></div>
-                <button class="action-btn" style="flex:1; background:#28a745;" onclick="updateBaseplate()">更新</button>
-            </div>
-            <button class="action-btn btn-danger" style="width:100%;" onclick="clearScene()">清空所有</button>
-        </div>
-    </div>
-
-    <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
-        let scene, camera, renderer, raycaster, mouse, controls;
-        let plane, gridHelper;
-        let rollOverMesh, rollOverMaterial;
-        let brickMaterialPhong;
-        const objects = [];
+        // 2. 玩家
+        this.player = this.add.rectangle(400, 300, 30, 30, CONFIG.playerColor);
+        this.physics.add.existing(this.player);
+        this.player.body.setCollideWorldBounds(true);
+        // 玩家影子
+        this.playerShadow = this.add.ellipse(400, 300, 30, 15, 0x000000, 0.3);
         
-        const unitSize = 20;
-        let currentBrickColor = 0xd01010;
-        let currentBrickSize = { w: 1, d: 1, h: 1.2 };
-        let isRotated = false;
-        let isDeleteMode = false;
-        let isMobile = window.innerWidth < 769;
+        this.player.hp = 100;
+        this.player.maxHp = 100;
 
-        let pointerDownPos = new THREE.Vector2();
-        let isOrbiting = false;
+        // 3. 敌人
+        this.enemies = this.physics.add.group();
+        this.createEnemy(600, 400);
+        this.createEnemy(200, 500);
+        this.createEnemy(300, 700); // 多加一个敌人
 
-        const colors = [
-            0xd01010, 0x0055bf, 0xffd010, 0x008f30, 0xffffff, 
-            0x111111, 0x9ba1a6, 0xff8010, 0x8a2be2
-        ];
+        // 4. 摄像机 (调整缩放以适应竖屏视野)
+        this.cameras.main.startFollow(this.player, true, 0.05, 0.05);
+        this.cameras.main.setZoom(1.0); // 竖屏视野窄，稍微拉远一点点或保持1.0
 
-        init();
-        animate();
+        // 5. 初始化UI (竖屏布局核心)
+        this.createPortraitUI();
 
-        function init() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xeaddca);
-            scene.fog = new THREE.Fog(0xeaddca, 1000, 5000);
+        // 6. 交互
+        this.physics.add.overlap(this.player, this.enemies, this.onTouchEnemy, null, this);
+    }
 
-            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10000);
-            camera.position.set(600, 800, 1000);
-            camera.lookAt(0, 0, 0);
+    createIsoBackground() {
+        const graphics = this.add.graphics();
+        graphics.lineStyle(1, 0x444444, 1);
+        const gridSize = 40;
+        const width = 2000;
+        const height = 2000;
+        
+        this.physics.world.setBounds(0, 0, width, height);
+        
+        graphics.beginPath();
+        for (let x = 0; x <= width; x += gridSize) {
+            graphics.moveTo(x, 0);
+            graphics.lineTo(x, height);
+        }
+        for (let y = 0; y <= height; y += gridSize) {
+            graphics.moveTo(0, y);
+            graphics.lineTo(width, y);
+        }
+        graphics.strokePath();
+        this.add.rectangle(width/2, height/2, width, height, 0x222222).setDepth(-1);
+    }
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            renderer.useLegacyLights = false;
-            document.getElementById('canvas-container').appendChild(renderer.domElement);
+    createEnemy(x, y) {
+        let enemy = this.add.rectangle(x, y, 30, 30, CONFIG.enemyColor);
+        this.physics.add.existing(enemy);
+        enemy.hp = 50;
+        enemy.maxHp = 50;
+        enemy.hpBarBg = this.add.rectangle(x, y - 25, 40, 6, 0x000000);
+        enemy.hpBarFg = this.add.rectangle(x, y - 25, 38, 4, 0xff0000);
+        this.enemies.add(enemy);
+    }
 
-            const ambientLight = new THREE.AmbientLight(0xffeedd, 0.8);
-            scene.add(ambientLight);
+    // --- 核心修改：竖屏 UI 布局 ---
+    createPortraitUI() {
+        const width = this.scale.width;
+        const height = this.scale.height;
 
-            const mainLight = new THREE.DirectionalLight(0xffffff, 2.0);
-            mainLight.position.set(100, 200, 100);
-            mainLight.castShadow = true;
-            mainLight.shadow.mapSize.width = 2048; 
-            mainLight.shadow.mapSize.height = 2048;
-            scene.add(mainLight);
-            
-            const fillLight = new THREE.DirectionalLight(0xccccff, 0.5);
-            fillLight.position.set(-100, 50, -100);
-            scene.add(fillLight);
+        // 1. 摇杆：放在屏幕底部正中间
+        // 半径稍微调小一点，避免占据太多屏幕
+        this.joyStick = this.plugins.get('rexVirtualJoystick').add(this, {
+            x: width / 2,
+            y: height - 100, // 距离底部100像素
+            radius: 50,
+            base: this.add.circle(0, 0, 50, 0x888888, 0.5).setDepth(100),
+            thumb: this.add.circle(0, 0, 25, 0xcccccc, 0.8).setDepth(101),
+        }).on('update', this.handleJoystick, this);
 
-            raycaster = new THREE.Raycaster();
-            mouse = new THREE.Vector2();
+        // 2. 技能按钮组
+        this.skillBtns = []; // 初始化数组
 
-            createBaseplate(20, 20);
-            updateBrickMaterial();
-            initRollOverMesh();
+        // 普攻 (Attack) - 放在右下角，摇杆的右侧
+        // 位置：右下，稍微大一点
+        this.createSkillBtn(width - 60, height - 80, 40, 0xffaa00, '攻', () => this.doAttack());
 
-            const canvas = renderer.domElement;
-            canvas.addEventListener('pointermove', onPointerMove);
-            canvas.addEventListener('pointerdown', onPointerDown);
-            canvas.addEventListener('pointerup', onPointerUp);
-            
-            document.addEventListener('keydown', onDocumentKeyDown);
-            window.addEventListener('resize', onWindowResize);
+        // 技能1 (Skill 1) - 放在左下角，摇杆的左侧
+        this.createSkillBtn(60, height - 80, 30, 0x00aaff, '技1', () => this.castSkill(1));
 
-            initUI();
+        // 技能2 (Skill 2) - 放在普攻的上方 (右侧)
+        this.createSkillBtn(width - 60, height - 160, 30, 0x00aaff, '技2', () => this.castSkill(2));
 
-            controls = new OrbitControls(camera, canvas);
-            controls.enableDamping = true; 
-            controls.dampingFactor = 0.1;
-            controls.rotateSpeed = 0.7; 
-            
-            controls.addEventListener('start', () => { isOrbiting = true; rollOverMesh.visible = false; });
-            controls.addEventListener('end', () => { isOrbiting = false; updateRollOverVisibility(); });
+        // 技能3 (Skill 3) - 放在技能1的上方 (左侧)
+        this.createSkillBtn(60, height - 160, 30, 0xff00ff, '闪', () => this.castSkill(3));
+
+        // 3. 玩家状态栏 (Top UI)
+        this.uiContainer = this.add.container(0, 0).setScrollFactor(0).setDepth(200);
+        
+        // 简单的顶部通栏背景
+        let topBar = this.add.rectangle(width/2, 30, width, 60, 0x000000, 0.5);
+        
+        // 头像
+        let avatar = this.add.rectangle(30, 30, 40, 40, 0x444444);
+        let name = this.add.text(60, 15, "Player 1", { fontSize: '14px', fill: '#fff' });
+        
+        // 血条 (自适应宽度)
+        let hpBg = this.add.rectangle(width/2 + 20, 40, width - 120, 10, 0x333333);
+        this.playerHpBar = this.add.rectangle(width/2 + 20, 40, width - 120, 10, 0x00ff00); // 初始满血
+        this.playerHpBar.maxWidth = width - 120; // 记录最大宽度用于计算
+
+        this.uiContainer.add([topBar, avatar, name, hpBg, this.playerHpBar]);
+
+        // 注册 Resize 事件，处理屏幕旋转或大小变化
+        this.scale.on('resize', this.resizeUI, this);
+    }
+
+    createSkillBtn(x, y, radius, color, text, callback) {
+        let btn = this.add.circle(x, y, radius, color, 0.7)
+            .setScrollFactor(0)
+            .setInteractive()
+            .setDepth(100);
+        let label = this.add.text(x, y, text, { fontSize: '14px', fontStyle: 'bold', color: '#000' })
+            .setOrigin(0.5).setScrollFactor(0).setDepth(101);
+
+        btn.on('pointerdown', () => { btn.setScale(0.9); callback(); });
+        btn.on('pointerup', () => btn.setScale(1));
+        
+        // 记录相对位置，用于resize
+        // 我们记录它相对于 屏幕宽度(w) 和 高度(h) 的比例或偏移
+        // 这里简单记录它应该是 "Left/Right" 和 "Bottom" 的偏移
+        const isRight = x > this.scale.width / 2;
+        this.skillBtns.push({
+            btn, label, 
+            offsetX: isRight ? x - this.scale.width : x, // 右侧存负值，左侧存正值
+            offsetY: y - this.scale.height // 存底部偏移(负值)
+        });
+    }
+
+    resizeUI(gameSize) {
+        const width = gameSize.width;
+        const height = gameSize.height;
+
+        // 1. 重置摇杆到中下方
+        if (this.joyStick) {
+            this.joyStick.setPosition(width / 2, height - 100);
         }
 
-        function updateBrickMaterial() {
-            brickMaterialPhong = new THREE.MeshPhongMaterial({
-                color: currentBrickColor,
-                specular: 0x666666,
-                shininess: 80,
-                flatShading: false
+        // 2. 重置按钮位置
+        if (this.skillBtns) {
+            this.skillBtns.forEach(item => {
+                // 如果 offsetX 是负数，说明是靠右的，加上新宽度；如果是正数，说明靠左，保持不变
+                const newX = item.offsetX < 0 ? width + item.offsetX : item.offsetX;
+                const newY = height + item.offsetY;
+                
+                item.btn.setPosition(newX, newY);
+                item.label.setPosition(newX, newY);
             });
         }
 
-        function createBaseplate(widthUnits, depthUnits) {
-            if(plane) scene.remove(plane);
-            if(gridHelper) scene.remove(gridHelper);
-            const oldPlaneIndex = objects.findIndex(obj => obj.userData.isGround);
-            if(oldPlaneIndex > -1) objects.splice(oldPlaneIndex, 1);
+        // 3. 重置血条 UI
+        // 这里简化处理，直接刷新整个场景可能更方便，但为了演示，我们只调整血条背景位置
+        // 实际项目中建议重绘 UI Container
+    }
 
-            const w = widthUnits * unitSize;
-            const d = depthUnits * unitSize;
-
-            gridHelper = new THREE.GridHelper(Math.max(w, d), Math.max(widthUnits, depthUnits), 0xbbbbbb, 0xdddddd);
-            scene.add(gridHelper);
-
-            const geometry = new THREE.PlaneGeometry(w, d);
-            geometry.rotateX(-Math.PI / 2);
-            plane = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ color: 0xf0f0f0, specular: 0x111111, shininess: 10 }));
-            plane.receiveShadow = true;
-            plane.userData = { isGround: true };
-            scene.add(plane);
-            objects.push(plane);
-        }
-
-        function initRollOverMesh() {
-            if(rollOverMesh) scene.remove(rollOverMesh);
-            rollOverMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: 0.5, transparent: true, depthTest: false });
-            
-            const wUnits = isRotated ? currentBrickSize.d : currentBrickSize.w;
-            const dUnits = isRotated ? currentBrickSize.w : currentBrickSize.d;
-            const w = wUnits * unitSize;
-            const d = dUnits * unitSize;
-            const h = currentBrickSize.h * unitSize;
-
-            const geo = new THREE.BoxGeometry(w, h, d);
-            geo.translate(0, h / 2, 0);
-            rollOverMesh = new THREE.Mesh(geo, rollOverMaterial);
-            rollOverMesh.renderOrder = 999; 
-            scene.add(rollOverMesh);
-        }
-
-        function createLegoBrick(sizeW, sizeD) {
-            const w = sizeW * unitSize;
-            const d = sizeD * unitSize;
-            const h = 1.2 * unitSize;
-
-            const group = new THREE.Group();
-            const baseGeo = new THREE.BoxGeometry(w, h, d);
-            baseGeo.translate(0, h / 2, 0);
-            const baseMesh = new THREE.Mesh(baseGeo, brickMaterialPhong);
-            baseMesh.castShadow = true;
-            baseMesh.receiveShadow = true;
-            group.add(baseMesh);
-
-            const studGeo = new THREE.CylinderGeometry(4.2, 4.2, 3.5, 32);
-            studGeo.translate(0, 3.5 / 2, 0);
-
-            const startX = -(w/2) + unitSize/2;
-            const startZ = -(d/2) + unitSize/2;
-
-            for(let i=0; i<sizeW; i++) {
-                for(let j=0; j<sizeD; j++) {
-                    const stud = new THREE.Mesh(studGeo, brickMaterialPhong);
-                    stud.position.x = startX + i * unitSize;
-                    stud.position.z = startZ + j * unitSize;
-                    stud.position.y = h - 0.1; 
-                    stud.castShadow = true;
-                    stud.receiveShadow = true;
-                    group.add(stud);
-                }
-            }
-
-            group.userData = { isBrick: true, wUnits: sizeW, dUnits: sizeD };
-            return group;
-        }
-
-        function onPointerDown(event) {
-            if(event.target.closest('.ui-area')) return;
-            pointerDownPos.set(event.clientX, event.clientY);
-        }
-
-        function onPointerMove(event) {
-            // 在移动时更新鼠标位置，确保预览框跟随手指
-            updatePointerPosition(event);
-
-            if (isOrbiting) return;
-            if (isMobile && !event.isPrimary) return;
-
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(objects, true);
-
-            if (intersects.length > 0) {
-                const intersect = intersects[0];
-                const normal = intersect.face.normal;
-                
-                const voxelPos = new THREE.Vector3().copy(intersect.point).add(normal.clone().multiplyScalar(unitSize * 0.1));
-                
-                rollOverMesh.position.x = Math.floor(voxelPos.x / unitSize) * unitSize + unitSize / 2;
-                rollOverMesh.position.z = Math.floor(voxelPos.z / unitSize) * unitSize + unitSize / 2;
-                
-                if (intersect.object.userData.isGround || (intersect.object.parent && intersect.object.parent.userData.isGround)) {
-                    rollOverMesh.position.y = 0;
-                } else {
-                    rollOverMesh.position.y = Math.floor(intersect.point.y / unitSize) * unitSize;
-                    if(normal.y > 0.8 && (intersect.point.y % unitSize) > unitSize * 0.8 ) {
-                         rollOverMesh.position.y += unitSize;
-                    }
-                }
-
-                const wUnits = isRotated ? currentBrickSize.d : currentBrickSize.w;
-                const dUnits = isRotated ? currentBrickSize.w : currentBrickSize.d;
-                if (wUnits % 2 === 0) rollOverMesh.position.x += unitSize / 2;
-                if (dUnits % 2 === 0) rollOverMesh.position.z += unitSize / 2;
-
-                updateRollOverVisibility();
-            } else {
-                 if(!isDeleteMode) rollOverMesh.visible = false;
-            }
-        }
-
-        function onPointerUp(event) {
-            if(event.target.closest('.ui-area')) return;
-            
-            const moveX = Math.abs(event.clientX - pointerDownPos.x);
-            const moveY = Math.abs(event.clientY - pointerDownPos.y);
-            const distance = Math.sqrt(moveX * moveX + moveY * moveY);
-
-            // 如果移动超过 5 像素，认为是拖拽(旋转视角)，不执行放置/删除
-            if (distance > 5) return;
-
-            // 关键：在放置前再次更新鼠标位置，确保使用最终点击的坐标
-            updatePointerPosition(event);
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(objects, true);
-
-            if (intersects.length > 0) {
-                const intersect = intersects[0];
-
-                if (event.shiftKey || isDeleteMode) {
-                    let target = intersect.object;
-                    while(target.parent && target.parent !== scene) {
-                        if(target.userData.isBrick || target.userData.isGround) break;
-                        target = target.parent;
-                    }
-                    if (target.userData.isBrick) {
-                        scene.remove(target);
-                        objects.splice(objects.indexOf(target), 1);
-                        if(isMobile && navigator.vibrate) navigator.vibrate(30);
-                    }
-                    return;
-                }
-
-                const wUnits = isRotated ? currentBrickSize.d : currentBrickSize.w;
-                const dUnits = isRotated ? currentBrickSize.w : currentBrickSize.d;
-                
-                const brick = createLegoBrick(wUnits, dUnits);
-                
-                // 确保对齐：手动运行一次 onPointerMove 的坐标计算逻辑
-                // onPointerMove(event) 已经运行了，这里直接使用 rollOverMesh.position
-                brick.position.copy(rollOverMesh.position);
-                
-                scene.add(brick);
-                objects.push(brick);
-                if(isMobile && navigator.vibrate) navigator.vibrate(15);
-            }
-        }
-        
-        // --- 坐标获取修复函数 ---
-        function updatePointerPosition(event) {
-            let x = event.clientX;
-            let y = event.clientY;
-
-            // FIX: 针对移动设备上快速点击时 event.clientX/Y 可能不准确的问题。
-            // 检查是否有 touches 数组（Touch Event 属性），如果有则使用第一个触点。
-            if (event.touches && event.touches.length > 0) {
-                x = event.touches[0].clientX;
-                y = event.touches[0].clientY;
-            } else if (event.changedTouches && event.changedTouches.length > 0) {
-                // For pointerup/touchend, sometimes the coordinates are in changedTouches
-                x = event.changedTouches[0].clientX;
-                y = event.changedTouches[0].clientY;
-            }
-            
-            // 只有当坐标有效时才更新 mouse 向量
-            if (x !== undefined && y !== undefined) {
-                mouse.set(
-                    (x / window.innerWidth) * 2 - 1,
-                    -(y / window.innerHeight) * 2 + 1
-                );
-            }
-        }
-        // ------------------------
-
-        function updateRollOverVisibility() {
-            if (!isDeleteMode && !isOrbiting) {
-                rollOverMesh.visible = true;
-            } else {
-                rollOverMesh.visible = false;
-            }
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            isMobile = window.innerWidth < 769;
-            adjustUILayout();
-        }
-
-        function onDocumentKeyDown(event) {
-            if (event.code === 'KeyR') rotateBrick();
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
-        }
-
-        // --- UI 逻辑（保持不变） ---
-        window.rotateBrick = function() {
-            isRotated = !isRotated;
-            rollOverMesh.rotation.y = isRotated ? -Math.PI / 2 : 0;
-            initRollOverMesh();
-            rollOverMesh.rotation.y = isRotated ? -Math.PI / 2 : 0; 
-        }
-
-        window.toggleDeleteMode = function() {
-            isDeleteMode = !isDeleteMode;
-            const btn = document.getElementById('btn-delete-mode');
-            if(isDeleteMode) {
-                btn.classList.add('active');
-                btn.innerHTML = '🗑️ 删除模式: 开';
-                document.body.style.cursor = 'not-allowed';
-            } else {
-                btn.classList.remove('active');
-                btn.innerHTML = '🗑️ 删除模式: 关';
-                document.body.style.cursor = 'auto';
-            }
-            updateRollOverVisibility();
-        }
-        
-        window.updateBaseplate = function() {
-            const w = parseInt(document.getElementById('base-w').value) || 20;
-            const d = parseInt(document.getElementById('base-d').value) || 20;
-            createBaseplate(w, d);
-            if(isMobile) toggleSettingsPanel();
-        }
-
-        window.clearScene = function() {
-            if(!confirm('确定要清空所有积木吗？')) return;
-            for (let i = objects.length - 1; i >= 0; i--) {
-                const obj = objects[i];
-                if (obj.userData.isBrick) {
-                    scene.remove(obj);
-                    objects.splice(i, 1);
-                }
-            }
-            if(isMobile) toggleSettingsPanel();
-        }
-
-        window.toggleSettingsPanel = function() {
-            const panel = document.getElementById('mobile-settings-panel');
-            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
-        }
-
-        function initUI() {
-            const palette = document.getElementById('color-palette');
-            colors.forEach((c, index) => {
-                const btn = document.createElement('div');
-                btn.className = 'color-btn' + (index === 0 ? ' active' : '');
-                btn.style.backgroundColor = '#' + c.toString(16).padStart(6, '0');
-                btn.onclick = () => {
-                    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    currentBrickColor = c;
-                    updateBrickMaterial();
-                    rollOverMesh.material.color.setHex(c);
-                };
-                palette.appendChild(btn);
-            });
-
-            const sizeBtns = document.querySelectorAll('.size-btn');
-            sizeBtns.forEach(btn => {
-                btn.onclick = () => {
-                    sizeBtns.forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    currentBrickSize.w = parseInt(btn.dataset.w);
-                    currentBrickSize.d = parseInt(btn.dataset.d);
-                    isRotated = false;
-                    rollOverMesh.rotation.y = 0;
-                    initRollOverMesh();
-                };
-            });
-            adjustUILayout();
-        }
-
-        function adjustUILayout() {
-            const colorControls = document.getElementById('tpl-color-controls');
-            const sizeControls = document.getElementById('tpl-size-controls');
-            const settingsControls = document.getElementById('tpl-settings-controls');
-
-            if (isMobile) {
-                document.getElementById('color-container-wrapper').appendChild(colorControls);
-                document.getElementById('size-container-wrapper').appendChild(sizeControls);
-                document.getElementById('settings-controls-container').appendChild(settingsControls);
-            } else {
-                const desktopContainer = document.getElementById('desktop-controls-container');
-                desktopContainer.appendChild(colorControls);
-                desktopContainer.appendChild(sizeControls);
-                desktopContainer.appendChild(settingsControls);
-            }
-        }
-    </script>
-</body>
-</html>
+    handleJoystick() {
+        const force = this.joyStick.force;
+        if (force > 0) {
+            this.scene.scene.physics.velocityFromRotation(this.joyStick.rotation, CONFIG.moveSpeed, this.player.body.velocity);
+        } else {
+            this.player.body.set
