@@ -190,4 +190,125 @@ class MainScene extends Phaser.Scene {
             });
         }
 
-        // 3. 重置血条 UI // 这里简化处理，直接刷新整个场景可能更方便，但为了演示，我们只调整血条背景位置 // 实际项目中建议重绘 UI Container } handleJoystick() { const force = this.joyStick.force; if (force > 0) { this.scene.scene.physics.velocityFromRotation(this.joyStick.rotation, CONFIG.moveSpeed, this.player.body.velocity); } else { this.player.body.setVelocity(0); } } update() { this.playerShadow.x = this.player.x; this.playerShadow.y = this.player.y + 15; this.enemies.getChildren().forEach(enemy => { if (enemy.active) { this.physics.moveToObject(enemy, this.player, 70); enemy.hpBarBg.setPosition(enemy.x, enemy.y - 25); enemy.hpBarFg.setPosition(enemy.x, enemy.y - 25); enemy.setDepth(enemy.y); } }); this.player.setDepth(this.player.y); } doAttack() { this.cameras.main.shake(50, 0.005); // 模拟近战范围攻击 this.createShockwave(this.player.x, this.player.y, 0xffaa00); this.enemies.getChildren().forEach(enemy => { if (Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) < 80) { this.damageEnemy(enemy, 20); } }); } castSkill(id) { if(id === 3) { // 闪避技能：向当前朝向冲刺 const speed = 400; this.physics.velocityFromRotation(this.joyStick.rotation, speed, this.player.body.velocity); this.player.setTint(0x00ffff); setTimeout(() => this.player.clearTint(), 200); return; } // 其它技能特效 const color = id === 1 ? 0x00ffff : 0xff00ff; this.createShockwave(this.player.x, this.player.y, color, 120); } createShockwave(x, y, color, radius = 60) { let circle = this.add.circle(x, y, 10, color, 0.5).setDepth(y + 1); this.tweens.add({ targets: circle, radius: radius, alpha: 0, duration: 300, onComplete: () => circle.destroy() }); } damageEnemy(enemy, amount) { enemy.hp -= amount; let percent = Math.max(0, enemy.hp / enemy.maxHp); enemy.hpBarFg.width = 38 * percent; if (enemy.hp <= 0) { enemy.hpBarBg.destroy(); enemy.hpBarFg.destroy(); enemy.destroy(); } } onTouchEnemy(player, enemy) { if (Math.random() > 0.95) { this.player.hp -= 1; let percent = Math.max(0, this.player.hp / this.player.maxHp); // 更新顶部血条 if(this.playerHpBar.maxWidth) { this.playerHpBar.width = this.playerHpBar.maxWidth * percent; } player.setTint(0xff0000); setTimeout(() => player.clearTint(), 100); } } } const config = { type: Phaser.AUTO, width: window.innerWidth, height: window.innerHeight, backgroundColor: '#222', parent: 'game-container', physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } }, plugins: { global: [{ key: 'rexVirtualJoystick', plugin: rexvirtualjoystickplugin, start: true }] }, scene: [MainScene], scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH } }; const game = new Phaser.Game(config); </script> </body> </html>
+
+        // 3. 重置血条 UI
+        // 这里简化处理，直接刷新整个场景可能更方便，但为了演示，我们只调整血条背景位置
+        // 实际项目中建议重绘 UI Container
+    }
+
+    handleJoystick() {
+        const force = this.joyStick.force;
+        if (force > 0) {
+            this.scene.scene.physics.velocityFromRotation(this.joyStick.rotation, CONFIG.moveSpeed, this.player.body.velocity);
+        } else {
+            this.player.body.setVelocity(0);
+        }
+    }
+
+    update() {
+        this.playerShadow.x = this.player.x;
+        this.playerShadow.y = this.player.y + 15;
+
+        this.enemies.getChildren().forEach(enemy => {
+            if (enemy.active) {
+                this.physics.moveToObject(enemy, this.player, 70);
+                enemy.hpBarBg.setPosition(enemy.x, enemy.y - 25);
+                enemy.hpBarFg.setPosition(enemy.x, enemy.y - 25);
+                enemy.setDepth(enemy.y);
+            }
+        });
+        this.player.setDepth(this.player.y);
+    }
+
+    doAttack() {
+        this.cameras.main.shake(50, 0.005);
+        // 模拟近战范围攻击
+        this.createShockwave(this.player.x, this.player.y, 0xffaa00);
+        
+        this.enemies.getChildren().forEach(enemy => {
+            if (Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) < 80) {
+                this.damageEnemy(enemy, 20);
+            }
+        });
+    }
+
+    castSkill(id) {
+        if(id === 3) {
+            // 闪避技能：向当前朝向冲刺
+            const speed = 400;
+            this.physics.velocityFromRotation(this.joyStick.rotation, speed, this.player.body.velocity);
+            this.player.setTint(0x00ffff);
+            setTimeout(() => this.player.clearTint(), 200);
+            return;
+        }
+
+        // 其它技能特效
+        const color = id === 1 ? 0x00ffff : 0xff00ff;
+        this.createShockwave(this.player.x, this.player.y, color, 120);
+    }
+
+    createShockwave(x, y, color, radius = 60) {
+        let circle = this.add.circle(x, y, 10, color, 0.5).setDepth(y + 1);
+        this.tweens.add({
+            targets: circle,
+            radius: radius,
+            alpha: 0,
+            duration: 300,
+            onComplete: () => circle.destroy()
+        });
+    }
+
+    damageEnemy(enemy, amount) {
+        enemy.hp -= amount;
+        let percent = Math.max(0, enemy.hp / enemy.maxHp);
+        enemy.hpBarFg.width = 38 * percent;
+        if (enemy.hp <= 0) {
+            enemy.hpBarBg.destroy();
+            enemy.hpBarFg.destroy();
+            enemy.destroy();
+        }
+    }
+
+    onTouchEnemy(player, enemy) {
+        if (Math.random() > 0.95) {
+             this.player.hp -= 1;
+             let percent = Math.max(0, this.player.hp / this.player.maxHp);
+             // 更新顶部血条
+             if(this.playerHpBar.maxWidth) {
+                 this.playerHpBar.width = this.playerHpBar.maxWidth * percent;
+             }
+             player.setTint(0xff0000);
+             setTimeout(() => player.clearTint(), 100);
+        }
+    }
+}
+
+const config = {
+    type: Phaser.AUTO,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    backgroundColor: '#222',
+    parent: 'game-container',
+    physics: {
+        default: 'arcade',
+        arcade: { gravity: { y: 0 }, debug: false }
+    },
+    plugins: {
+        global: [{
+            key: 'rexVirtualJoystick',
+            plugin: rexvirtualjoystickplugin,
+            start: true
+        }]
+    },
+    scene: [MainScene],
+    scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    }
+};
+
+const game = new Phaser.Game(config);
+
+</script>
+</body>
+</html>
